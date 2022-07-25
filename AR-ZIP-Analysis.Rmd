@@ -1,0 +1,244 @@
+---
+title: "AR-ZIP Model"
+author: "Aime & Jeannette"
+date: '2022-03-26'
+output:
+  word_document: default
+  html_document: default
+  pdf_document: default
+---
+
+
+```{r}
+
+covid19.deaths <- read.csv("Rwanda-COVID19-Deaths")
+head(covid19.deaths)
+```
+
+
+```{r}
+
+library(zoo)
+
+covid19.deaths$date <- seq(as.Date("2020-03-14"), as.Date("2022-03-25"), by = "day")
+
+covid19.deaths.ts <- ts(covid19.deaths$new_deaths,    
+                        start = c(2020, as.numeric(format(covid19.deaths$date[1], "%j"))),
+                        end = c(2022, as.numeric(format(covid19.deaths$date[742], "%j"))),
+                        frequency = 365)
+
+covid19.deaths.ts
+```
+
+
+```{r}
+
+plot(covid19.deaths.ts, main="Time Sequence Plot of Daily COVID-19 Deaths", ylab="Daily COVID-19 Deaths", xlab = "Days")
+```
+
+```{r}
+
+hist(covid19.deaths.ts, main="Histogram of COVID-19 Deaths Counts", ylab="Frequency", xlab = "Counts")
+```
+
+
+```{r}
+
+acf(covid19.deaths.ts, lag.max = 24, main="ACF of Daily COVID-19 Deaths")
+```
+
+
+```{r}
+
+pacf(covid19.deaths.ts, lag.max = 24, main="PACF of Daily COVID-19 Deaths")
+```
+
+
+```{r}
+
+library(tseries)
+
+adf.test(covid19.deaths.ts)
+```
+
+
+```{r}
+
+kpss.test(covid19.deaths.ts)
+```
+
+
+
+```{r}
+
+Box.test(covid19.deaths.ts, type = "Ljung-Box")
+```
+
+
+
+```{r}
+
+# An R Package for Analysis of Count Time Series Following Generalized Linear Models
+library("tscount")
+
+interventions <- interv_covariate(n = length(covid19.deaths.ts) - 14, tau = 530, delta = 1)
+deaths.fit.pois <- tsglm(covid19.deaths.ts[1:727], model = list(past_obs = 1), 
+                       xreg = interventions, distr = "poisson")
+deaths.fit.nbin <- tsglm(covid19.deaths.ts[1:727], model = list(past_obs = 1),
+                        xreg = interventions, distr = "nbinom")
+```
+
+
+
+```{r}
+
+summary(deaths.fit.pois)
+```
+
+```{r}
+
+summary(deaths.fit.nbin)
+```
+
+
+
+```{r}
+
+deaths.fitted.pois <- fitted(deaths.fit.pois)
+deaths.fitted.nbin <- fitted(deaths.fit.nbin)
+
+plot(deaths.fitted.pois, type = 'l')
+```
+
+```{r}
+
+plot(deaths.fitted.nbin, type = 'l')
+```
+
+
+
+```{r}
+
+plot( covid19.deaths.ts[1:727], type = "l", col = 3, ylim = c(0, 24), xlab = "Days", ylab = "COVID-19 Deaths")
+lines(deaths.fitted.pois, type = "l", col = 2)
+legend("topleft", c("Poisson Fitted COVID-19 deaths", "Actual COVID-19 deaths"), lty = 1, col = 2:3)
+```
+
+
+```{r}
+
+plot(covid19.deaths.ts[1:727], type = "l", col = 3, ylim = c(0, 24), xlab = "Days", ylab = "COVID-19 Deaths")
+lines(deaths.fitted.nbin, type = "l", col = 2)
+legend("topleft", c("Neg-Binomial Fitted COVID-19 deaths", "Actual COVID-19 deaths"), lty = 1, col = 2:3)
+```
+
+
+```{r}
+
+hist(residuals(deaths.fit.nbin))
+```
+
+
+```{r}
+
+plot(residuals(deaths.fit.nbin), type = 'l')
+```
+
+
+```{r}
+
+acf(residuals(deaths.fit.nbin))
+```
+
+
+```{r}
+
+pacf(residuals(deaths.fit.nbin))
+```
+
+
+
+```{r}
+
+interv_test(deaths.fit.pois, tau = 530, delta = 0, est_interv=TRUE)
+```
+
+```{r}
+
+interv_test(deaths.fit.pois, tau = 197, delta = 1, est_interv=TRUE)
+```
+
+
+```{r}
+
+interv_test(deaths.fit.nbin, tau = 530, delta = 0, est_interv=TRUE)
+```
+
+
+```{r}
+
+interv_test(deaths.fit.nbin, tau = 197, delta = 1, est_interv=TRUE)
+```
+
+
+
+```{r}
+
+interventions.ts <- ts(interv_covariate(n = 14, tau = 0, delta = 1),    
+           start = c(2021, as.numeric(format(covid19.deaths$date[729], "%j"))),
+           end = c(2021, as.numeric(format(covid19.deaths$date[742], "%j"))),
+           frequency = 365)
+
+predict(deaths.fit.nbin, n.ahead = 14, global = TRUE, newxreg =  interventions.ts)$pred  
+```
+
+
+```{r}
+
+predict.covid19.deaths.ts <- ts(predict(deaths.fit.nbin, n.ahead = 14, global = TRUE, newxreg =  interventions.ts)$pred,    
+           start = c(2021, as.numeric(format(covid19.deaths$date[729], "%j"))),
+           end = c(2021, as.numeric(format(covid19.deaths$date[742], "%j"))),
+           frequency = 365)
+
+predict.covid19.deaths.ts
+```
+
+```{r}
+
+actual.covid19.deaths.ts <- ts(covid19.deaths.ts[728:742],    
+           start = c(2021, as.numeric(format(covid19.deaths$date[729], "%j"))),
+           end = c(2021, as.numeric(format(covid19.deaths$date[742], "%j"))),
+           frequency = 365)
+actual.covid19.deaths.ts
+```
+
+
+```{r}
+
+plot(actual.covid19.deaths.ts, type = "b", col = 3, ylim = c(0, 4), main = "Plot of Forecasted COVID-19 Deaths (Next 14 Days)", xlab = "Days", ylab = "COVID-19 Deaths")
+lines(predict.covid19.deaths.ts, type = "b", col = 2)
+legend("topleft", c("Forecasted COVID-19 deaths", "Actual COVID-19 deaths"), lty = 1, col = 2:3)
+```
+
+```{r}
+
+deaths.fit.pois <- tsglm(covid19.deaths.ts[1:727], model = list(past_obs = 1), distr = "poisson")
+deaths.fit.nbin <- tsglm(covid19.deaths.ts[1:727], model = list(past_obs = 1), distr = "nbinom")
+```
+
+
+```{r}
+
+summary(deaths.fit.pois)
+```
+
+
+```{r}
+
+summary(deaths.fit.nbin)
+```
+
+
+
+
+
